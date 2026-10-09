@@ -1,0 +1,136 @@
+"""Lecture recorder: a small window on top of OBS, HTML user interface via pywebview (Edge WebView2).
+
+Before recording: module, topic, screen, camera, microphone, options, folders.
+While recording the window shrinks to a slim bar with time, level, pause and
+stop. After stopping, the recording is split and filed.
+
+Global hotkeys:
+    Ctrl+Alt+R   start recording; press twice within 3 seconds to stop
+    Ctrl+Alt+P   pause and resume
+"""
+from __future__ import annotations
+
+import ctypes
+import os
+import sys
+import threading
+import time
+from pathlib import Path
+
+import webview
+
+from core import Core
+
+TITLE = "Vorlesung aufnehmen"
+HERE = Path(__file__).resolve().parent
+FULL = (470, 640)
+BAR = (440, 58)
+
+
+class Api:
+    """Methods callable from JavaScript as window.pywebview.api.<name>()."""
+
+    def __init__(self, core: Core):
+        self._core = core
+        self._window = None
+        self._full_position = None
+
+    def data(self):
+        return self._core.data()
+
+    def status(self):
+        return self._core.status()
+
+    def select(self, kind, name):
+        self._core.select(kind, name)
+
+    def option(self, name, value):
+        self._core.set_option(name, value)
+
+    def texts(self, module, topic):
+        self._core.set_text(module or "", topic or "")
+
+    def folder(self, kind):
+        current = self._core.archive if kind == "archive_dir" else self._core.raw_dir
+        picked = self._window.create_file_dialog(webview.FOLDER_DIALOG, directory=str(current))
+        if picked:
+            self._core.set_folder(kind, picked[0] if isinstance(picked, (list, tuple)) else picked)
+
+    def start(self):
+        return self._core.start()
+
+    def pause(self):
+        self._core.pause()
+
+    def stop(self):
+        self._core.stop()
+
+    def open_result(self):
+        self._core.open_result()
+
+    def view(self, mode):
+        w = self._window
+        if mode == "bar":
+            self._full_position = (w.x, w.y)
+            w.resize(*BAR)
+            screen_width = ctypes.windll.user32.GetSystemMetrics(0)
+            w.move(max(0, (screen_width - BAR[0]) // 2), 12)     # top center, draggable
+        else:
+            w.resize(*FULL)
+            if self._full_position:
+                w.move(*self._full_position)
+
+    def minimize(self):
+        self._window.minimize()
+
+    def close(self):
+        self._core.stop()
+        self._window.destroy()
+
+
+def exclude_from_capture() -> None:
+    """Hide the window from screen capture (WDA_EXCLUDEFROMCAPTURE); it stays visible on screen."""
+    for _ in range(40):
+        hwnd = ctypes.windll.user32.FindWindowW(None, TITLE)
+        if hwnd:
+            ctypes.windll.user32.SetWindowDisplayAffinity(hwnd, 0x11)
+            return
+        time.sleep(0.1)
+
+
+def single_instance() -> bool:
+    """Only one window: two instances fight over hotkeys and the recording. A second
+    start brings the existing window to the front and exits."""
+    single_instance.mutex = ctypes.windll.kernel32.CreateMutexW(None, False, "Local\\LectureRecorder")
+    if ctypes.windll.kernel32.GetLastError() != 183:    # ERROR_ALREADY_EXISTS
+        return True
+    hwnd = ctypes.windll.user32.FindWindowW(None, TITLE)
+    if hwnd:
+        ctypes.windll.user32.ShowWindow(hwnd, 9)        # SW_RESTORE
+        ctypes.windll.user32.SetForegroundWindow(hwnd)
+    return False
+
+
+def main(test_func=None) -> None:
+    if not single_instance():
+        return
+    try:
+        core = Core()
+    except Exception as e:
+        ctypes.windll.user32.MessageBoxW(None, f"OBS ließ sich nicht vorbereiten:\n{e}", TITLE, 0x10)
+        sys.exit(1)
+    api = Api(core)
+    window = webview.create_window(TITLE, url=str(HERE / "ui.html"), js_api=api,
+                                   width=FULL[0], height=FULL[1], min_size=(300, 50), resizable=False,
+                                   frameless=True, on_top=True, background_color="#16181c", easy_drag=False)
+    api._window = window
+    if not os.environ.get("LECTURE_RECORDER_VISIBLE"):     # tests that take screenshots set this
+        window.events.shown += lambda: threading.Thread(target=exclude_from_capture, daemon=True).start()
+    if test_func:
+        webview.start(test_func, window)
+    else:
+        webview.start()
+
+
+if __name__ == "__main__":
+    main()

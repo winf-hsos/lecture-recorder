@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Vorlesung aufnehmen</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #16181c; --card: #1f2227; --field: #262a30; --line: #333841;
+    --text: #e8eaed; --muted: #9aa0a6; --faint: #6b7076;
+    --blue: #009ee3; --red: #d32f2f; --red-hover: #e53935; --yellow: #f9a825; --green: #43a047;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: "Segoe UI Variable Text", "Segoe UI", sans-serif; font-size: 13px; overflow: hidden; user-select: none; }
+  svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+
+  /* header */
+  .header { display: flex; align-items: center; gap: 10px; padding: 12px 10px 10px 16px; }
+  .header .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--blue); }
+  .header .title { font-weight: 600; font-size: 14px; flex: 1; }
+  .pill { font-size: 11px; color: var(--muted); background: var(--field); padding: 3px 9px; border-radius: 999px; }
+  .win-btn { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; color: var(--muted); }
+  .win-btn:hover { background: var(--field); color: var(--text); }
+  .win-btn.close:hover { background: #c42b1c; color: #fff; }
+
+  /* setup view */
+  .content { padding: 2px 16px 14px; display: grid; gap: 10px; }
+  .field { background: var(--field); border: 1px solid var(--line); border-radius: 9px; padding: 6px 10px 7px; }
+  .field:focus-within { border-color: var(--blue); }
+  .field label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 1px; }
+  .field input, .field select { width: 100%; background: transparent; border: 0; outline: none; color: var(--text);
+    font: inherit; font-size: 13.5px; padding: 0; appearance: none; text-overflow: ellipsis; }
+  .field select { cursor: pointer; }
+  .field select option { background: var(--card); }
+  .field input::placeholder { color: var(--faint); }
+  .device { display: flex; align-items: center; gap: 10px; }
+  .device svg { color: var(--blue); }
+  .device .field { flex: 1; min-width: 0; }
+  .level { height: 6px; border-radius: 3px; background: var(--field); overflow: hidden; }
+  .level div { height: 100%; width: 0; background: var(--green); transition: width .08s linear; }
+  .options { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--muted); font-size: 12px; }
+  .toggle { display: flex; align-items: center; gap: 7px; cursor: pointer; }
+  .toggle input { display: none; }
+  .toggle .knob { width: 28px; height: 16px; border-radius: 8px; background: var(--line); position: relative; transition: .15s; }
+  .toggle .knob::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--muted); transition: .15s; }
+  .toggle input:checked + .knob { background: var(--blue); }
+  .toggle input:checked + .knob::after { left: 14px; background: #fff; }
+  .record { margin-top: 4px; width: 100%; padding: 13px; border-radius: 11px; background: var(--red); color: #fff;
+    font-weight: 600; font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .record:hover { background: var(--red-hover); }
+  .record .key { font-weight: 400; font-size: 11px; color: #ffd6d6; }
+  .record .circle { width: 12px; height: 12px; border-radius: 50%; background: #fff; }
+  .hint { min-height: 16px; font-size: 12px; color: var(--muted); }
+  .hint.error { color: #ef6c6c; } .hint.ok { color: #7cc47f; }
+
+  .result { background: var(--card); border-radius: 11px; padding: 10px 12px; display: none; gap: 8px; }
+  .result.show { display: grid; }
+  .bar-track { height: 5px; border-radius: 3px; background: var(--field); overflow: hidden; }
+  .bar-track div { height: 100%; width: 0; background: var(--blue); }
+  .btn { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 11px; font-size: 12px; }
+  .btn:hover { border-color: var(--blue); color: #fff; }
+
+  details { color: var(--muted); font-size: 12px; }
+  summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; }
+  summary::-webkit-details-marker { display: none; }
+  .folders { display: grid; grid-template-columns: auto 1fr auto; gap: 6px 8px; align-items: center; margin-top: 8px; }
+  .folders .path { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+  .folders button { color: var(--blue); font-size: 12px; }
+
+  /* slim bar while recording */
+  .bar { display: none; height: 100vh; align-items: center; gap: 12px; padding: 0 10px 0 16px; }
+  body.recording .bar { display: flex; } body.recording .setup { display: none; }
+  .bar .rec { width: 11px; height: 11px; border-radius: 50%; background: #e53935; animation: pulse 1.6s infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .bar .clock { font-family: "Cascadia Mono", Consolas, monospace; font-size: 17px; letter-spacing: .5px; }
+  .bar .level { flex: 1; height: 5px; }
+  .round { width: 34px; height: 34px; border-radius: 50%; background: var(--field); display: grid; place-items: center; }
+  .round:hover { background: var(--line); }
+  .round.confirm { background: var(--red); width: auto; padding: 0 12px; border-radius: 17px; font-size: 12px; gap: 6px; display: flex; }
+  body.paused .bar { background: #3a2f0a; color: #ffe08a; }
+  body.paused .bar .rec { background: var(--yellow); animation: none; }
+  body.paused .round { background: #5a4a12; }
+</style>
+</head>
+<body>
+<svg style="display:none">
+  <symbol id="i-screen" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M15 10l4.6-2.3A1 1 0 0 1 21 8.6v6.8a1 1 0 0 1-1.4.9L15 14"/><rect x="3" y="6" width="12" height="12" rx="2"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-minimize" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M4 6h5l2 2h9v10H4z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></symbol>
+</svg>
+
+<div class="setup">
+  <div class="header pywebview-drag-region">
+    <span class="dot"></span><span class="title">Vorlesung aufnehmen</span>
+    <span class="pill" id="term">…</span>
+    <button class="win-btn" title="Minimieren" onclick="api().minimize()"><svg class="i"><use href="#i-minimize"/></svg></button>
+    <button class="win-btn close" title="Schließen" onclick="closeWindow()"><svg class="i"><use href="#i-close"/></svg></button>
+  </div>
+  <div class="content">
+    <div class="field"><label>Modul</label><input id="module" list="modules" placeholder="Modul wählen oder eintippen" onchange="sendTexts()"><datalist id="modules"></datalist></div>
+    <div class="field"><label>Thema der Sitzung, optional</label><input id="topic" placeholder="geht in den Dateinamen" onchange="sendTexts()"></div>
+    <div class="device"><svg class="i"><use href="#i-screen"/></svg><div class="field"><label>Bildschirm</label><select id="screen" onchange="selectDevice(this)"></select></div></div>
+    <div class="device"><svg class="i"><use href="#i-camera"/></svg><div class="field"><label>Kamera</label><select id="camera" onchange="selectDevice(this)"></select></div></div>
+    <div class="device"><svg class="i"><use href="#i-mic"/></svg><div class="field"><label>Mikrofon</label><select id="microphone" onchange="selectDevice(this)"></select></div></div>
+    <div class="level" title="Mikrofonpegel"><div id="level1"></div></div>
+    <div class="options">
+      <label class="toggle"><input type="checkbox" id="hide_taskbar" onchange="setOption(this)"><span class="knob"></span>Taskleiste nicht aufnehmen</label>
+      <label class="toggle"><input type="checkbox" id="hide_alttab" onchange="setOption(this)"><span class="knob"></span>Alt+Tab ausblenden</label>
+    </div>
+    <button class="record" onclick="startRecording()"><span class="circle"></span>Aufnahme starten<span class="key">Strg+Alt+R</span></button>
+    <div class="hint" id="hint"></div>
+    <div class="result" id="result">
+      <div class="bar-track"><div id="progress"></div></div>
+      <div id="resultText"></div>
+      <div><button class="btn" id="openButton" onclick="api().open_result()"><svg class="i"><use href="#i-folder"/></svg>Im Ordner öffnen</button></div>
+    </div>
+    <details>
+      <summary><svg class="i"><use href="#i-gear"/></svg>Ordner</summary>
+      <div class="folders">
+        <span>Ablage</span><span class="path" id="archive_dir"></span><button onclick="pickFolder('archive_dir')">Ändern</button>
+        <span>Rohaufnahme</span><span class="path" id="raw_dir"></span><button onclick="pickFolder('raw_dir')">Ändern</button>
+      </div>
+    </details>
+  </div>
+</div>
+
+<div class="bar pywebview-drag-region">
+  <span class="rec"></span>
+  <span class="clock" id="clock">00:00:00</span>
+  <div class="level"><div id="level2"></div></div>
+  <button class="round" id="pauseButton" title="Pause (Strg+Alt+P)" onclick="api().pause()"><svg class="i"><use href="#i-pause"/></svg></button>
+  <button class="round" id="stopButton" title="Stopp" onclick="stopRecording()"><svg class="i"><use href="#i-stop"/></svg></button>
+</div>
+
+<script>
+  const api = () => window.pywebview.api;
+  const $ = id => document.getElementById(id);
+  let view = "full", confirmUntil = 0;
+
+  function label(kind, name, index) {
+    if (kind !== "screen") return name;
+    // "DELL U2421E: 1920x1200 @ 0,0 (Hauptbildschirm)" -> "Bildschirm 1 · DELL U2421E · Hauptbildschirm"
+    const m = name.match(/^(.*?):\s*\d+x\d+\s*@\s*-?\d+,-?\d+\s*(?:\((.*)\))?/);
+    return m ? ["Bildschirm " + (index + 1), m[1], m[2]].filter(Boolean).join(" · ") : name;
+  }
+  function fillSelect(kind, names, chosen) {
+    const s = $(kind); s.innerHTML = "";
+    names.forEach((n, i) => { const o = document.createElement("option"); o.textContent = label(kind, n, i); o.value = n; s.appendChild(o); });
+    s.value = chosen;
+  }
+  async function load() {
+    const d = await api().data();
+    $("term").textContent = d.term.replace(" - ", " · ");
+    const list = $("modules"); list.innerHTML = "";
+    for (const m of d.modules) { const o = document.createElement("option"); o.value = m; list.appendChild(o); }
+    $("module").value = d.module;
+    for (const kind of ["screen", "camera", "microphone"]) fillSelect(kind, d.devices[kind], d.choice[kind]);
+    for (const k in d.options) $(k).checked = d.options[k];
+    $("archive_dir").textContent = d.archive_dir;
+    $("raw_dir").textContent = d.raw_dir;
+  }
+  const selectDevice = el => api().select(el.id, el.value);
+  const setOption = el => api().option(el.id, el.checked);
+  const sendTexts = () => api().texts($("module").value, $("topic").value);
+  async function pickFolder(kind) { await api().folder(kind); load(); }
+  async function startRecording() {
+    await sendTexts();
+    const error = await api().start();
+    if (error) showHint(error, "error");
+  }
+  function stopRecording() {
+    const b = $("stopButton");
+    if (Date.now() < confirmUntil) { confirmUntil = 0; api().stop(); return; }
+    confirmUntil = Date.now() + 3000;                       // a second click within 3 s stops
+    b.classList.add("confirm"); b.innerHTML = '<svg class="i"><use href="#i-stop"/></svg>beenden?';
+    setTimeout(() => { if (Date.now() >= confirmUntil) { b.classList.remove("confirm"); b.innerHTML = '<svg class="i"><use href="#i-stop"/></svg>'; } }, 3100);
+  }
+  async function closeWindow() {
+    const st = await api().status();
+    if (st.recording && !confirm("Die Aufnahme läuft. Beenden und schließen?")) return;
+    api().close();
+  }
+  function showHint(text, kind) { const h = $("hint"); h.textContent = text; h.className = "hint " + (kind || ""); }
+  const levelWidth = db => Math.max(0, Math.min(100, (db + 60) / 60 * 100));
+  const levelColor = db => db > -3 ? "#e53935" : db > -12 ? "#f9a825" : "#43a047";
+
+  async function tick() {
+    try {
+      const st = await api().status();
+      const wanted = st.recording ? "bar" : "full";
+      if (wanted !== view) { view = wanted; await api().view(wanted); }
+      document.body.classList.toggle("recording", st.recording);
+      document.body.classList.toggle("paused", st.recording && st.paused);
+      $("clock").textContent = st.paused ? "PAUSE " + st.time : st.time;
+      $("pauseButton").innerHTML = '<svg class="i"><use href="#i-' + (st.paused ? "play" : "pause") + '"/></svg>';
+      for (const id of ["level1", "level2"]) { const l = $(id); l.style.width = levelWidth(st.level) + "%"; l.style.background = levelColor(st.level); }
+      $("result").classList.toggle("show", !st.recording && (st.splitting || st.has_result));
+      $("progress").style.width = (st.splitting ? st.progress * 100 : 100) + "%";
+      $("resultText").textContent = st.splitting ? "Wird geteilt und abgelegt … " + Math.round(st.progress * 100) + " %" : st.message;
+      $("openButton").style.display = (!st.splitting && st.has_result) ? "" : "none";
+      if (!st.splitting && !st.has_result) showHint(st.message, st.message_kind);
+      else showHint(st.hotkey_errors.length ? "Tasten belegt: " + st.hotkey_errors.join(", ") : "", "error");
+    } catch (e) { }
+    setTimeout(tick, 250);
+  }
+  window.addEventListener("pywebviewready", () => { load(); tick(); });
+</script>
+</body>
+</html>
