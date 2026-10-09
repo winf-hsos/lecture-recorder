@@ -7,6 +7,7 @@ and the status loop run in different threads.
 """
 from __future__ import annotations
 
+import ctypes
 import datetime as dt
 import json
 import math
@@ -68,6 +69,19 @@ def free_path(path: Path) -> Path:
         p = path.with_name(f"{path.stem} ({n}){path.suffix}")
         n += 1
     return p
+
+
+def recycle(path: Path) -> None:
+    """Move a file to the recycle bin (falls back to deleting it if Windows refuses)."""
+    class SHFILEOPSTRUCTW(ctypes.Structure):
+        _fields_ = [("hwnd", ctypes.c_void_p), ("wFunc", ctypes.c_uint), ("pFrom", ctypes.c_wchar_p),
+                    ("pTo", ctypes.c_wchar_p), ("fFlags", ctypes.c_ushort), ("fAnyOperationsAborted", ctypes.c_int),
+                    ("hNameMappings", ctypes.c_void_p), ("lpszProgressTitle", ctypes.c_wchar_p)]
+    FO_DELETE, FOF_SILENT, FOF_NOCONFIRMATION, FOF_ALLOWUNDO, FOF_NOERRORUI = 3, 0x4, 0x10, 0x40, 0x400
+    op = SHFILEOPSTRUCTW(wFunc=FO_DELETE, pFrom=str(path) + "\0",
+                         fFlags=FOF_SILENT | FOF_NOCONFIRMATION | FOF_ALLOWUNDO | FOF_NOERRORUI)
+    if ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op)) != 0 and path.exists():
+        path.unlink()
 
 
 def load_settings() -> dict:
@@ -146,6 +160,7 @@ class Core:
         self.offset: float | None = None          # wall clock minus recording time
         self.alttab_start: float | None = None
         self.stop_pressed = 0.0
+        self.asking = False                       # stopped by the user, waiting for "save or discard"
         self.splitting = False
         self.progress = 0.0
         self.message, self.message_kind = "", "info"
@@ -254,7 +269,7 @@ class Core:
         return ""
 
     def pause(self) -> None:
-        if self.session is None:
+        if self.session is None or self.asking:
             return
         with self.lock:
             if self.o.request("GetRecordStatus")["outputPaused"]:
@@ -263,11 +278,32 @@ class Core:
                 self.o.request("PauseRecord")
 
     def stop(self) -> None:
+        """Pause the recording and ask whether to save it; finish() or resume() answers."""
+        if self.session is None or self.asking:
+            return
+        with self.lock:
+            if not self.o.request("GetRecordStatus")["outputPaused"]:
+                self.o.request("PauseRecord")
+        self.asking = True
+
+    def resume(self) -> None:
+        """Answer "continue recording" to the save question."""
+        if self.session is None or not self.asking:
+            return
+        with self.lock:
+            self.o.request("ResumeRecord")
+        self.asking = False
+
+    def finish(self, save: bool) -> None:
+        """End the recording: split and file it, or move the raw file to the recycle bin."""
         if self.session is None:
             return
         with self.lock:
             raw = Path(self.o.request("StopRecord")["outputPath"])
-        s, self.session = self.session, None
+        s, self.session, self.asking = self.session, None, False
+        if not save:
+            threading.Thread(target=self._discard, args=(raw,), daemon=False).start()
+            return
         folder = self.archive / semester(s["date"]) / s["module"]
         stem = f"{s['date']:%Y-%m-%d} - {s['topic'] or s['module']}"
         screen_out = free_path(folder / f"{stem} - {SCREEN_SUFFIX}.mp4")
@@ -292,6 +328,14 @@ class Core:
         finally:
             self.splitting = False
 
+    def _discard(self, raw: Path) -> None:
+        time.sleep(1.5)   # let OBS close the file
+        try:
+            recycle(raw)
+            self.message, self.message_kind = "Aufnahme verworfen, die Rohdatei liegt im Papierkorb", "info"
+        except Exception as e:
+            self.message, self.message_kind = f"Verwerfen fehlgeschlagen, die Rohdatei liegt noch in {raw.parent}: {e}", "error"
+
     def open_result(self) -> None:
         if self.last_file and self.last_file.exists():
             subprocess.Popen(["explorer", "/select,", str(self.last_file)])
@@ -302,7 +346,7 @@ class Core:
 
     def status(self) -> dict:
         db = self.meter.db if time.time() - self.meter.at < 1 else -90.0
-        return {"recording": self.session is not None, "paused": self.obs_state["paused"],
+        return {"recording": self.session is not None, "asking": self.asking, "paused": self.obs_state["paused"],
                 "time": self.obs_state["time"], "level": round(db, 1), "splitting": self.splitting,
                 "progress": round(self.progress, 3), "message": self.message, "message_kind": self.message_kind,
                 "has_result": bool(self.last_file), "hotkey_errors": list(self.keys.failed)}
@@ -334,6 +378,8 @@ class Core:
                 error = self.start()
                 if error:
                     self.message, self.message_kind = error, "error"
+            elif self.asking:
+                pass
             elif time.time() - self.stop_pressed > 3:      # stop needs a second press within 3 s
                 self.stop_pressed = time.time()
                 self.message, self.message_kind = "Zum Beenden Strg+Alt+R noch einmal drücken", "info"

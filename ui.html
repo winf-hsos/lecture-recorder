@@ -15,6 +15,7 @@
     font-family: "Segoe UI Variable Text", "Segoe UI", sans-serif; font-size: 13px; overflow: hidden; user-select: none; }
   svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
   button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+  button * { pointer-events: none; }   /* the click always lands on the button itself */
 
   /* header */
   .header { display: flex; align-items: center; gap: 10px; padding: 12px 10px 10px 16px; }
@@ -78,10 +79,21 @@
   .bar .level { flex: 1; height: 5px; }
   .round { width: 34px; height: 34px; border-radius: 50%; background: var(--field); display: grid; place-items: center; }
   .round:hover { background: var(--line); }
-  .round.confirm { background: var(--red); width: auto; padding: 0 12px; border-radius: 17px; font-size: 12px; gap: 6px; display: flex; }
   body.paused .bar { background: #3a2f0a; color: #ffe08a; }
   body.paused .bar .rec { background: var(--yellow); animation: none; }
   body.paused .round { background: #5a4a12; }
+
+  /* save question after stop */
+  .ask { display: none; }
+  body.asking .ask { display: flex; } body.asking .run { display: none; }
+  .bar .question { font-weight: 600; font-size: 14px; flex: 1; white-space: nowrap; }
+  .bar .clock.ask { font-size: 13px; color: var(--muted); }
+  .pill-btn { height: 32px; padding: 0 13px; border-radius: 16px; background: var(--field); font-size: 12.5px;
+    display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .pill-btn:hover { background: var(--line); }
+  .pill-btn.save { background: var(--blue); color: #fff; font-weight: 600; }
+  .pill-btn.save:hover { background: #20aeea; }
+  .pill-btn.discard:hover, .pill-btn.discard.confirm { background: var(--red); color: #fff; }
 </style>
 </head>
 <body>
@@ -100,7 +112,7 @@
 
 <div class="setup">
   <div class="header pywebview-drag-region">
-    <span class="dot"></span><span class="title">Vorlesung aufnehmen</span>
+    <span class="dot pywebview-drag-region"></span><span class="title pywebview-drag-region">Vorlesung aufnehmen</span>
     <span class="pill" id="term">…</span>
     <button class="win-btn" title="Minimieren" onclick="api().minimize()"><svg class="i"><use href="#i-minimize"/></svg></button>
     <button class="win-btn close" title="Schließen" onclick="closeWindow()"><svg class="i"><use href="#i-close"/></svg></button>
@@ -134,17 +146,22 @@
 </div>
 
 <div class="bar pywebview-drag-region">
-  <span class="rec"></span>
-  <span class="clock" id="clock">00:00:00</span>
-  <div class="level"><div id="level2"></div></div>
-  <button class="round" id="pauseButton" title="Pause (Strg+Alt+P)" onclick="api().pause()"><svg class="i"><use href="#i-pause"/></svg></button>
-  <button class="round" id="stopButton" title="Stopp" onclick="stopRecording()"><svg class="i"><use href="#i-stop"/></svg></button>
+  <span class="rec run pywebview-drag-region"></span>
+  <span class="clock run pywebview-drag-region" id="clock">00:00:00</span>
+  <div class="level run pywebview-drag-region"><div id="level2"></div></div>
+  <button class="round run" id="pauseButton" title="Pause (Strg+Alt+P)" onclick="api().pause()"><svg class="i"><use href="#i-pause"/></svg></button>
+  <button class="round run" id="stopButton" title="Beenden" onclick="api().stop()"><svg class="i"><use href="#i-stop"/></svg></button>
+  <span class="question ask pywebview-drag-region">Aufnahme speichern?</span>
+  <span class="clock ask pywebview-drag-region" id="askClock"></span>
+  <button class="pill-btn save ask" onclick="api().finish(true)">Speichern</button>
+  <button class="pill-btn ask" onclick="api().resume()"><svg class="i"><use href="#i-play"/></svg>Weiter</button>
+  <button class="pill-btn discard ask" id="discardButton" onclick="discard()">Verwerfen</button>
 </div>
 
 <script>
   const api = () => window.pywebview.api;
   const $ = id => document.getElementById(id);
-  let view = "full", confirmUntil = 0;
+  let view = "full", pauseIcon = "pause", confirmUntil = 0;
 
   function label(kind, name, index) {
     if (kind !== "screen") return name;
@@ -177,12 +194,12 @@
     const error = await api().start();
     if (error) showHint(error, "error");
   }
-  function stopRecording() {
-    const b = $("stopButton");
-    if (Date.now() < confirmUntil) { confirmUntil = 0; api().stop(); return; }
-    confirmUntil = Date.now() + 3000;                       // a second click within 3 s stops
-    b.classList.add("confirm"); b.innerHTML = '<svg class="i"><use href="#i-stop"/></svg>beenden?';
-    setTimeout(() => { if (Date.now() >= confirmUntil) { b.classList.remove("confirm"); b.innerHTML = '<svg class="i"><use href="#i-stop"/></svg>'; } }, 3100);
+  function discard() {
+    const b = $("discardButton");
+    if (Date.now() < confirmUntil) { confirmUntil = 0; api().finish(false); return; }
+    confirmUntil = Date.now() + 3000;                       // a second click within 3 s discards
+    b.classList.add("confirm"); b.textContent = "Wirklich verwerfen?";
+    setTimeout(() => { if (Date.now() >= confirmUntil) { b.classList.remove("confirm"); b.textContent = "Verwerfen"; } }, 3100);
   }
   async function closeWindow() {
     const st = await api().status();
@@ -196,12 +213,19 @@
   async function tick() {
     try {
       const st = await api().status();
-      const wanted = st.recording ? "bar" : "full";
+      const wanted = !st.recording ? "full" : st.asking ? "ask" : "bar";
       if (wanted !== view) { view = wanted; await api().view(wanted); }
       document.body.classList.toggle("recording", st.recording);
-      document.body.classList.toggle("paused", st.recording && st.paused);
+      document.body.classList.toggle("asking", st.recording && st.asking);
+      document.body.classList.toggle("paused", st.recording && st.paused && !st.asking);
       $("clock").textContent = st.paused ? "PAUSE " + st.time : st.time;
-      $("pauseButton").innerHTML = '<svg class="i"><use href="#i-' + (st.paused ? "play" : "pause") + '"/></svg>';
+      $("askClock").textContent = st.time;
+      const icon = st.paused ? "play" : "pause";
+      if (icon !== pauseIcon) {                               // only on change, or a click in between gets lost
+        pauseIcon = icon;
+        $("pauseButton").innerHTML = '<svg class="i"><use href="#i-' + icon + '"/></svg>';
+        $("pauseButton").title = st.paused ? "Weiter (Strg+Alt+P)" : "Pause (Strg+Alt+P)";
+      }
       for (const id of ["level1", "level2"]) { const l = $(id); l.style.width = levelWidth(st.level) + "%"; l.style.background = levelColor(st.level); }
       $("result").classList.toggle("show", !st.recording && (st.splitting || st.has_result));
       $("progress").style.width = (st.splitting ? st.progress * 100 : 100) + "%";

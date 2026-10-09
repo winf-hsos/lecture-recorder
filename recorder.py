@@ -19,12 +19,17 @@ from pathlib import Path
 
 import webview
 
+# Only the bare background of a drag region moves the window; a press on a button
+# inside it must stay a click.
+webview.settings["DRAG_REGION_DIRECT_TARGET_ONLY"] = True
+
 from core import Core
 
 TITLE = "Vorlesung aufnehmen"
 HERE = Path(__file__).resolve().parent
 FULL = (470, 640)
 BAR = (440, 58)
+ASK = (560, 58)
 
 
 class Api:
@@ -34,6 +39,7 @@ class Api:
         self._core = core
         self._window = None
         self._full_position = None
+        self._mode = "full"
 
     def data(self):
         return self._core.data()
@@ -65,26 +71,39 @@ class Api:
     def stop(self):
         self._core.stop()
 
+    def resume(self):
+        self._core.resume()
+
+    def finish(self, save):
+        self._core.finish(bool(save))
+
     def open_result(self):
         self._core.open_result()
 
     def view(self, mode):
+        """Switch the window between "full" (setup), "bar" (recording) and "ask" (save question)."""
         w = self._window
-        if mode == "bar":
-            self._full_position = (w.x, w.y)
-            w.resize(*BAR)
-            screen_width = ctypes.windll.user32.GetSystemMetrics(0)
-            w.move(max(0, (screen_width - BAR[0]) // 2), 12)     # top center, draggable
-        else:
+        if mode == "full":
             w.resize(*FULL)
             if self._full_position:
                 w.move(*self._full_position)
+        else:
+            size = BAR if mode == "bar" else ASK
+            if self._mode == "full":
+                self._full_position = (w.x, w.y)
+                screen_width = ctypes.windll.user32.GetSystemMetrics(0)
+                w.move(max(0, (screen_width - size[0]) // 2), 12)     # top center, draggable
+            else:                                                    # bar <-> question: stay centered
+                old = BAR if self._mode == "bar" else ASK
+                w.move(max(0, w.x - (size[0] - old[0]) // 2), w.y)
+            w.resize(*size)
+        self._mode = mode
 
     def minimize(self):
         self._window.minimize()
 
     def close(self):
-        self._core.stop()
+        self._core.finish(save=True)          # closing during a recording keeps it
         self._window.destroy()
 
 

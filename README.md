@@ -4,9 +4,17 @@ A small Windows app for recording lectures locally with OBS Studio, built as a r
 
 OBS does the capturing and encoding in the background, while the app gives you a compact window to pick module and devices and turns into a slim bar while you are recording. The user interface is in German, because it was written for teaching at a German university; code, comments and this documentation are in English.
 
-| Before recording | While recording | Paused | After stopping |
-|---|---|---|---|
-| ![Setup view](docs/screenshots/setup.png) | ![Recording bar](docs/screenshots/recording.png) | ![Paused bar](docs/screenshots/paused.png) | ![Result](docs/screenshots/result.png) |
+| Before recording | After stopping |
+|---|---|
+| ![Setup view](docs/screenshots/setup.png) | ![Result](docs/screenshots/result.png) |
+
+While recording, the window shrinks to a slim bar that turns yellow when paused, and stopping asks whether to keep the recording:
+
+![Recording bar](docs/screenshots/recording.png)
+
+![Paused bar](docs/screenshots/paused.png)
+
+![Save question](docs/screenshots/save-question.png)
 
 ## Features
 
@@ -15,6 +23,7 @@ OBS does the capturing and encoding in the background, while the app gives you a
 - **The taskbar is left out** of the screen track by default, using the work area of the selected monitor.
 - **The Alt+Tab overview is hidden.** The Windows task switcher cannot be excluded from capture, so the app logs when you press Alt+Tab and freezes the screen track for that moment afterwards, while audio and camera keep running.
 - **Pause and resume** with a button or a global hotkey.
+- **Save, continue or discard**: stopping first pauses the recording and asks what to do, so an accidental stop costs nothing. A discarded recording goes to the recycle bin.
 - **Two MP4 files per session**, for example `2026-10-09 - Regression - Bildschirm.mp4` and `… - Kamera.mp4`, filed under `<archive>\<term>\<module>\`. Both tracks share the same audio and start at the same instant, so they can be placed side by side in an editor without syncing.
 - **Configurable folders** for the archive and for the raw recordings, plus an "open in folder" button once a recording is filed.
 - **Moderate load and file size**: hardware encoding on NVIDIA (NVENC) with constant quality, about 3.4 GB per hour for the raw recording.
@@ -47,7 +56,7 @@ Start the app with `lecture-recorder.cmd` (no console window) or `python recorde
 2. Check screen, camera and microphone, and watch the level bar.
 3. Click **Aufnahme starten** or press **Ctrl+Alt+R**. The window shrinks to a bar at the top of the screen.
 4. Pause and resume with the pause button or **Ctrl+Alt+P**.
-5. Stop with the stop button (click twice) or press **Ctrl+Alt+R** twice within three seconds; the double press protects against stopping a lecture by accident.
+5. Stop with the stop button, or press **Ctrl+Alt+R** twice within three seconds (the double press protects against stopping a lecture with a stray keystroke). The recording is paused and the bar asks whether to save it: **Speichern** files it, **Weiter** continues recording, and **Verwerfen** (click twice) moves the raw file to the recycle bin.
 
 After stopping, the recording is split and encoded into the two MP4 files, and the raw MKV is deleted only once both outputs have been checked to be as long as the source. If splitting fails, the raw file is kept.
 
