@@ -28,7 +28,7 @@ from core import Core
 TITLE = "Vorlesung aufnehmen"
 HERE = Path(__file__).resolve().parent
 FULL = (470, 640)
-BAR = (440, 58)
+BAR = (480, 58)
 ASK = (560, 58)
 
 
@@ -91,13 +91,21 @@ class Api:
             size = BAR if mode == "bar" else ASK
             if self._mode == "full":
                 self._full_position = (w.x, w.y)
-                screen_width = ctypes.windll.user32.GetSystemMetrics(0)
+                screen_width = webview.screens[0].width               # logical pixels, like move()
                 w.move(max(0, (screen_width - size[0]) // 2), 12)     # top center, draggable
             else:                                                    # bar <-> question: stay centered
                 old = BAR if self._mode == "bar" else ASK
                 w.move(max(0, w.x - (size[0] - old[0]) // 2), w.y)
             w.resize(*size)
         self._mode = mode
+
+    def widen(self, width):
+        """Make the bar wide enough for its content (CSS pixels), keeping it centered."""
+        w = self._window
+        grow = int(width) - w.width                          # pywebview sizes are logical pixels
+        if grow > 0:
+            w.move(max(0, w.x - grow // 2), w.y)
+            w.resize(int(width), BAR[1])
 
     def minimize(self):
         self._window.minimize()
@@ -143,6 +151,7 @@ def main(test_func=None) -> None:
                                    width=FULL[0], height=FULL[1], min_size=(300, 50), resizable=False,
                                    frameless=True, on_top=True, background_color="#16181c", easy_drag=False)
     api._window = window
+    core.on_question = window.restore         # stopped by hotkey while minimized: show the question
     if not os.environ.get("LECTURE_RECORDER_VISIBLE"):     # tests that take screenshots set this
         window.events.shown += lambda: threading.Thread(target=exclude_from_capture, daemon=True).start()
     if test_func:

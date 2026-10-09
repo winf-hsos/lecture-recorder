@@ -161,6 +161,7 @@ class Core:
         self.alttab_start: float | None = None
         self.stop_pressed = 0.0
         self.asking = False                       # stopped by the user, waiting for "save or discard"
+        self.on_question = lambda: None           # set by the UI: bring the window back for the question
         self.splitting = False
         self.progress = 0.0
         self.message, self.message_kind = "", "info"
@@ -285,6 +286,10 @@ class Core:
             if not self.o.request("GetRecordStatus")["outputPaused"]:
                 self.o.request("PauseRecord")
         self.asking = True
+        try:
+            self.on_question()
+        except Exception:
+            pass
 
     def resume(self) -> None:
         """Answer "continue recording" to the save question."""

@@ -84,10 +84,12 @@
   body.paused .round { background: #5a4a12; }
 
   /* save question after stop */
-  .ask { display: none; }
-  body.asking .ask { display: flex; } body.asking .run { display: none; }
+  .bar .ask { display: none !important; }
+  body.asking .bar .ask { display: flex !important; } body.asking .bar .run { display: none !important; }
   .bar .question { font-weight: 600; font-size: 14px; flex: 1; white-space: nowrap; }
   .bar .clock.ask { font-size: 13px; color: var(--muted); }
+  .bar > * { flex-shrink: 0; }          /* never squeeze a button; the window widens instead */
+  .bar .level { flex-shrink: 1; min-width: 40px; }
   .pill-btn { height: 32px; padding: 0 13px; border-radius: 16px; background: var(--field); font-size: 12.5px;
     display: flex; align-items: center; gap: 6px; white-space: nowrap; }
   .pill-btn:hover { background: var(--line); }
@@ -151,6 +153,7 @@
   <div class="level run pywebview-drag-region"><div id="level2"></div></div>
   <button class="round run" id="pauseButton" title="Pause (Strg+Alt+P)" onclick="api().pause()"><svg class="i"><use href="#i-pause"/></svg></button>
   <button class="round run" id="stopButton" title="Beenden" onclick="api().stop()"><svg class="i"><use href="#i-stop"/></svg></button>
+  <button class="win-btn run" id="minimizeButton" title="Minimieren (die Tasten wirken weiter)" onclick="api().minimize()"><svg class="i"><use href="#i-minimize"/></svg></button>
   <span class="question ask pywebview-drag-region">Aufnahme speichern?</span>
   <span class="clock ask pywebview-drag-region" id="askClock"></span>
   <button class="pill-btn save ask" onclick="api().finish(true)">Speichern</button>
@@ -210,11 +213,17 @@
   const levelWidth = db => Math.max(0, Math.min(100, (db + 60) / 60 * 100));
   const levelColor = db => db > -3 ? "#e53935" : db > -12 ? "#f9a825" : "#43a047";
 
+  function fitBar() {
+    // Text width depends on fonts and display scaling, so measure instead of trusting a fixed size.
+    const bar = document.querySelector(".bar");
+    if (view !== "full" && bar.scrollWidth > window.innerWidth) api().widen(bar.scrollWidth + 12);
+  }
+
   async function tick() {
     try {
       const st = await api().status();
       const wanted = !st.recording ? "full" : st.asking ? "ask" : "bar";
-      if (wanted !== view) { view = wanted; await api().view(wanted); }
+      if (wanted !== view) { view = wanted; await api().view(wanted); requestAnimationFrame(fitBar); }
       document.body.classList.toggle("recording", st.recording);
       document.body.classList.toggle("asking", st.recording && st.asking);
       document.body.classList.toggle("paused", st.recording && st.paused && !st.asking);

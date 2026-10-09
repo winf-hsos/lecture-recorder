@@ -8,7 +8,7 @@ OBS does the capturing and encoding in the background, while the app gives you a
 |---|---|
 | ![Setup view](docs/screenshots/setup.png) | ![Result](docs/screenshots/result.png) |
 
-While recording, the window shrinks to a slim bar that turns yellow when paused, and stopping asks whether to keep the recording:
+While recording, the window shrinks to a slim bar that turns yellow when paused and can be minimized (the hotkeys keep working), and stopping asks whether to keep the recording:
 
 ![Recording bar](docs/screenshots/recording.png)
 
