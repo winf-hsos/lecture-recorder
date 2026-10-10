@@ -101,3 +101,7 @@ Hiding Alt+Tab needs a small correction: the time OBS reports runs about 0.55 se
 ## Third-party software
 
 The exe contains [FFmpeg](https://ffmpeg.org/) (gyan.dev full build, licensed under the GPLv3; source at https://github.com/FFmpeg/FFmpeg and build details at https://www.gyan.dev/ffmpeg/builds/) and the Python runtime with pywebview, pythonnet and websockets, each under its own license.
+
+## License
+
+The source code is licensed under the MIT License, see [LICENSE](LICENSE). The bundled FFmpeg in the exe keeps its own license (GPLv3).
