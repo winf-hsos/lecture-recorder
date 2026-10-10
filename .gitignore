@@ -3,3 +3,5 @@ __pycache__/
 *.mkv
 *.mp4
 settings.json
+build/
+dist/

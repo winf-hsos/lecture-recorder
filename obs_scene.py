@@ -11,17 +11,13 @@ import os
 import time
 from pathlib import Path
 
+import hardware
 import obs_remote as remote
 
 NAME = "Lecture"                    # OBS profile, scene collection and scene
 SCREEN, CAMERA, MICROPHONE = "Screen", "Camera", "Microphone"
 FIELD_W, FIELD_H = 1920, 1200
 NO_CAMERA = "keine"                 # shown in the (German) user interface
-
-# CQP 26 gives about 7.5 Mbit/s for the wide canvas (3.4 GB per hour). The simple
-# output preset "HQ" wrote 42 Mbit/s, almost all of it webcam noise.
-ENCODER = {"rate_control": "CQP", "cqp": 26, "preset2": "p5", "tune": "hq", "multipass": "qres",
-           "profile": "high", "keyint_sec": 2, "bf": 2}
 
 
 def output_settings(raw_dir: Path) -> list[tuple[str, str, str]]:
@@ -30,7 +26,7 @@ def output_settings(raw_dir: Path) -> list[tuple[str, str, str]]:
         ("AdvOut", "RecType", "Standard"),
         ("AdvOut", "RecFilePath", Path(raw_dir).as_posix()),
         ("AdvOut", "RecFormat2", "mkv"),                 # survives a crash, unlike mp4
-        ("AdvOut", "RecEncoder", "obs_nvenc_h264_tex"),
+        ("AdvOut", "RecEncoder", hardware.obs_encoder()[0]),
         ("AdvOut", "RecTracks", "1"),
         ("AdvOut", "Track1Bitrate", "160"),
         ("AdvOut", "RecRescale", "false"),
@@ -73,7 +69,8 @@ def ensure_profile_and_scene(o: remote.Obs, raw_dir: Path) -> None:
         "parameterCategory": w[0], "parameterName": w[1]})["parameterValue"] != w[2]]
     encoder_file = Path(os.environ["APPDATA"]) / "obs-studio" / "basic" / "profiles" / NAME / "recordEncoder.json"
     current = json.loads(encoder_file.read_text(encoding="utf-8")) if encoder_file.exists() else {}
-    if differs or current != ENCODER:
+    encoder = hardware.obs_encoder()[1]
+    if differs or current != encoder:
         for category, name, value in wanted:
             o.request("SetProfileParameter", {"parameterCategory": category, "parameterName": name,
                                               "parameterValue": value})
@@ -82,7 +79,7 @@ def ensure_profile_and_scene(o: remote.Obs, raw_dir: Path) -> None:
             o.request("CreateProfile", {"profileName": "Empty"})
             others = ["Empty"]
         o.request("SetCurrentProfile", {"profileName": others[0]})
-        encoder_file.write_text(json.dumps(ENCODER), encoding="utf-8")
+        encoder_file.write_text(json.dumps(encoder), encoding="utf-8")
         o.request("SetCurrentProfile", {"profileName": NAME})
         time.sleep(1)
 

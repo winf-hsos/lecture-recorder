@@ -9,31 +9,28 @@ audio and start at the same instant, so no alignment is needed later.
 from __future__ import annotations
 
 import argparse
-import json
-import shutil
+import re
 import subprocess
 import sys
 from pathlib import Path
 from typing import Callable
 
+from hardware import NO_WINDOW, ffmpeg, ffmpeg_video_args
+
 FIELD_W, FIELD_H = 1920, 1200
 CAMERA_H = 1080
 FPS = 30
-ENCODE = ["-c:v", "h264_nvenc", "-preset", "p5", "-rc", "vbr", "-cq", "21", "-b:v", "0", "-pix_fmt", "yuv420p",
-          "-movflags", "+faststart"]   # mp4 with the index up front, so players start right away
-
-
-def ffmpeg() -> str:
-    p = shutil.which("ffmpeg")
-    if not p:
-        raise SystemExit("ffmpeg not found")
-    return p
 
 
 def duration(path: Path) -> float:
-    r = subprocess.run([shutil.which("ffprobe") or "ffprobe", "-v", "error", "-show_entries", "format=duration",
-                        "-of", "json", str(path)], capture_output=True, text=True)
-    return float(json.loads(r.stdout)["format"]["duration"])
+    """Length in seconds, read from ffmpeg's header dump (so no ffprobe is needed)."""
+    r = subprocess.run([ffmpeg(), "-hide_banner", "-i", str(path)], capture_output=True, text=True,
+                       encoding="utf-8", errors="replace", creationflags=NO_WINDOW)
+    m = re.search(r"Duration: (\d+):(\d+):(\d+(?:\.\d+)?)", r.stderr)
+    if not m:
+        raise RuntimeError(f"no duration in {path.name}")
+    h, mi, s = m.groups()
+    return int(h) * 3600 + int(mi) * 60 + float(s)
 
 
 def freeze_filter(src: str, dst: str, spans: list[tuple[float, float]]) -> str:
@@ -67,18 +64,19 @@ def split_recording(source: Path, screen_out: Path, camera_out: Path | None,
     top = (FIELD_H - CAMERA_H) // 2
     sw, sh = screen_size
     frz = freeze_filter("s0", "s", [s for s in (freeze or []) if s[1] > s[0]])
+    encode = ffmpeg_video_args()
     if camera_out:
         graph = (f"[0:v]split=2[a][b];[a]crop={sw}:{sh}:0:0[s0];{frz};"
                  f"[b]crop={FIELD_W}:{CAMERA_H}:{FIELD_W}:{top}[c]")
-        outputs = ["-map", "[s]", "-map", "0:a?", *ENCODE, "-c:a", "copy", str(screen_out),
-                   "-map", "[c]", "-map", "0:a?", *ENCODE, "-c:a", "copy", str(camera_out)]
+        outputs = ["-map", "[s]", "-map", "0:a?", *encode, "-c:a", "copy", str(screen_out),
+                   "-map", "[c]", "-map", "0:a?", *encode, "-c:a", "copy", str(camera_out)]
     else:
         graph = f"[0:v]crop={sw}:{sh}:0:0[s0];{frz}"
-        outputs = ["-map", "[s]", "-map", "0:a?", *ENCODE, "-c:a", "copy", str(screen_out)]
+        outputs = ["-map", "[s]", "-map", "0:a?", *encode, "-c:a", "copy", str(screen_out)]
     screen_out.parent.mkdir(parents=True, exist_ok=True)
     p = subprocess.Popen([ffmpeg(), "-y", "-v", "error", "-nostats", "-progress", "pipe:1",
                           "-i", str(source), "-filter_complex", graph, *outputs],
-                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, creationflags=NO_WINDOW)
     for line in p.stdout:
         if line.startswith("out_time_us=") and progress and total > 0:
             try:

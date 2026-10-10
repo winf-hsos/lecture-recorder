@@ -26,7 +26,7 @@ webview.settings["DRAG_REGION_DIRECT_TARGET_ONLY"] = True
 from core import Core
 
 TITLE = "Vorlesung aufnehmen"
-HERE = Path(__file__).resolve().parent
+HERE = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))   # unpack folder of the packaged app
 FULL = (470, 640)
 BAR = (480, 58)
 ASK = (560, 58)
@@ -152,6 +152,9 @@ def main(test_func=None) -> None:
                                    frameless=True, on_top=True, background_color="#16181c", easy_drag=False)
     api._window = window
     core.on_question = window.restore         # stopped by hotkey while minimized: show the question
+    # Closed by Windows (Alt+F4, taskbar) during a recording: keep it, like the close button does,
+    # instead of leaving OBS recording with nobody to stop it.
+    window.events.closing += lambda: core.finish(save=True)
     if not os.environ.get("LECTURE_RECORDER_VISIBLE"):     # tests that take screenshots set this
         window.events.shown += lambda: threading.Thread(target=exclude_from_capture, daemon=True).start()
     if test_func:
