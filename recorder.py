@@ -128,8 +128,9 @@ def exclude_from_capture() -> None:
 def single_instance() -> bool:
     """Only one window: two instances fight over hotkeys and the recording. A second
     start brings the existing window to the front and exits."""
-    single_instance.mutex = ctypes.windll.kernel32.CreateMutexW(None, False, "Local\\LectureRecorder")
-    if ctypes.windll.kernel32.GetLastError() != 183:    # ERROR_ALREADY_EXISTS
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)   # windll's GetLastError can be overwritten
+    single_instance.mutex = kernel32.CreateMutexW(None, False, "Local\\LectureRecorder")
+    if ctypes.get_last_error() != 183:                  # ERROR_ALREADY_EXISTS
         return True
     hwnd = ctypes.windll.user32.FindWindowW(None, TITLE)
     if hwnd:
