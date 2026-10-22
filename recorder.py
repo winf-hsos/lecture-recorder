@@ -26,6 +26,7 @@ webview.settings["DRAG_REGION_DIRECT_TARGET_ONLY"] = True
 from core import Core
 
 TITLE = "Vorlesung aufnehmen"
+APP_ID = "winf-hsos.LectureRecorder"
 HERE = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))   # unpack folder of the packaged app
 FULL = (470, 640)
 BAR = (480, 58)
@@ -142,6 +143,9 @@ def single_instance() -> bool:
 def main(test_func=None) -> None:
     if not single_instance():
         return
+    # Own taskbar identity, so a pinned Start menu entry with the same ID and the
+    # running window share one taskbar button.
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
     try:
         core = Core()
     except Exception as e:
