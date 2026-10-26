@@ -50,7 +50,7 @@ pip install -r requirements.txt
 python recorder.py
 ```
 
-`lecture-recorder.cmd` starts it without a console window, and `python tools/setup_obs.py` checks the OBS connection and lists the devices OBS sees. The app reads the remote-control password from OBS's own configuration; the environment variable `OBS_WEBSOCKET_PASSWORD` works as a fallback. The password is never printed.
+`lecture-recorder.cmd` starts it without a console window, and `python tools/setup_obs.py` checks the OBS connection and lists the devices OBS sees. `python tools/install_shortcut.py` (needs `pywin32`) adds a Start menu entry "Vorlesung aufnehmen" that runs `recorder.py` from this folder with `pythonw`, so it always starts the current source rather than a released exe; pinned to the taskbar, the entry and the running window share one button. The app reads the remote-control password from OBS's own configuration; the environment variable `OBS_WEBSOCKET_PASSWORD` works as a fallback. The password is never printed.
 
 To build the exe yourself, install PyInstaller and run:
 
@@ -89,6 +89,7 @@ Settings are stored in `%APPDATA%\lecture-recorder\settings.json`.
 | `split.py` | ffmpeg split into screen and camera track, freezing the Alt+Tab spans; also usable on the command line |
 | `tools/benchmark.py` | Test recording that measures CPU, GPU and encoder load |
 | `tools/build_exe.py` | Builds the single exe with PyInstaller |
+| `tools/install_shortcut.py` | Start menu entry that runs the current source |
 
 Hiding Alt+Tab needs a small correction: the time OBS reports runs about 0.55 seconds ahead of the picture that ends up in the file, so the detected spans are shifted by that delay and padded a little on both sides before they are frozen.
 
